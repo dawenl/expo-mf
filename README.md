@@ -9,6 +9,8 @@ The python module dependencies are:
 - bottleneck
 - pandas (needed to run the example for data preprocessing)
 
+**Note**: The code is mostly written for Python 2.7. For Python 3.x, it is still usable with minor modification. If you run into any problem with Python 3.x, feel free to contact me and I will try to get back to you with a helpful solution.  
+
 ## Datasets
 - [Taste Profile Subset](http://labrosa.ee.columbia.edu/millionsong/tasteprofile)
 - [Gowalla](https://snap.stanford.edu/data/loc-gowalla.html): the pre-processed data that we used in the paper can be downloaded [here](http://www.ee.columbia.edu/~dliang/data/gowalla/).
