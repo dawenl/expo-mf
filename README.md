@@ -13,7 +13,7 @@ The python module dependencies are:
 
 ## Datasets
 - [Taste Profile Subset](http://labrosa.ee.columbia.edu/millionsong/tasteprofile)
-- [Gowalla](https://snap.stanford.edu/data/loc-gowalla.html): the pre-processed data that we used in the paper can be downloaded [here](http://www.ee.columbia.edu/~dliang/data/gowalla/).
+- [Gowalla](https://snap.stanford.edu/data/loc-gowalla.html): the pre-processed data that we used in the paper can be downloaded [here](http://dawenl.github.io/data/gowalla_pro.zip/).
 
 We also used the arXiv and Mendeley dataset in the paper. However, these datasets are not publicly available. With Taste Profile Subset and Gowalla, we can still cover all the different variations of the model presented in the paper. 
 
