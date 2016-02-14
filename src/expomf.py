@@ -80,9 +80,10 @@ class ExpoMF(BaseEstimator, TransformerMixin):
         Parameters
         ---------
         lambda_theta, lambda_beta: float
-            Regularization parameter for user and item factors. Default value
-            1e-5. Since in implicit feedback all the n_users-by-n_items data
-            points are used for training, overfitting is almost never an issue
+            Regularization parameter for user (lambda_theta) and item factors (
+            lambda_beta). Default value 1e-5. Since in implicit feedback all
+            the n_users-by-n_items data points are used for training,
+            overfitting is almost never an issue
         lambda_y: float
             inverse variance on the observational model. Default value 1.0
         init_mu: float
