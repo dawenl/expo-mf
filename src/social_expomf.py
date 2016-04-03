@@ -184,7 +184,10 @@ class SocialExpoMF(BaseEstimator, TransformerMixin):
                 sys.stdout.flush()
 
             if vad_data is not None:
-                self._validate(X, N, vad_data)
+                vad_ndcg = self._validate(X, vad_data, **kwargs)
+                if self.early_stopping and self.vad_ndcg > vad_ndcg:
+                    break  # we will not save the parameter for this iteration
+                self.vad_ndcg = vad_ndcg
 
             if self.save_params:
                 self._save_params(i)
@@ -236,7 +239,7 @@ class SocialExpoMF(BaseEstimator, TransformerMixin):
             pred_vad = get_mu(self.tau, XT[idx[lo:hi]].T.tocsr(), self.alpha)
             init_loss = -np.sum(A_vad * np.log(pred_vad) + (1 - A_vad) *
                                 np.log(1 - pred_vad)) / self.batch_sgd + \
-                self.lam_nu / 2 * np.sum(self.tau.data**2)
+                self.lam_tau / 2 * np.sum(self.tau.data**2)
             if self.verbose:
                 print('\t\tEpoch #%d: initial validation loss = %.3f' %
                       (epoch, init_loss))
@@ -263,7 +266,7 @@ class SocialExpoMF(BaseEstimator, TransformerMixin):
             pred_vad = get_mu(self.tau, XT[idx[lo:hi]].T.tocsr(), self.alpha)
             loss = -np.sum(A_vad * np.log(pred_vad) + (1 - A_vad) *
                            np.log(1 - pred_vad)) / self.batch_sgd + \
-                self.lam_nu / 2 * np.sum(self.tau.data**2)
+                self.lam_tau / 2 * np.sum(self.tau.data**2)
             if self.verbose:
                 print('\t\tEpoch #%d: validation loss = %.3f' % (epoch, loss))
                 sys.stdout.flush()
@@ -284,9 +287,7 @@ class SocialExpoMF(BaseEstimator, TransformerMixin):
         if self.verbose:
             print('\tValidation NDCG@k: %.4f' % vad_ndcg)
             sys.stdout.flush()
-        if self.early_stopping and self.vad_ndcg > vad_ndcg:
-            break  # we will not save the parameter for this iteration
-        self.vad_ndcg = vad_ndcg
+        return vad_ndcg
 
     def _save_params(self, iter):
         '''Save the parameters'''
@@ -446,8 +447,6 @@ def recompute_factors(X, X_old, S, alpha, Y, lam, lam_y, n_jobs,
         alpha: user exposure bias (alpha: (n_users, 1))
     '''
     m, n = Y.shape  # m = number of users, n = number of items
-    assert X.shape[0]
-    assert X_old.shape[0] == S.shape[0] == S.shape[1] == m
     f = X.shape[1]  # f = number of factors
 
     start_idx = range(0, m, batch_size)
