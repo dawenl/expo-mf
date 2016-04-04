@@ -253,11 +253,10 @@ class SocialExpoMF(BaseEstimator, TransformerMixin):
                 pred_batch = get_mu(self.tau, XT[idx[lo:hi]].T.tocsr(),
                                     self.alpha)
                 diff = A_batch - pred_batch   # (n_users, batch_sgd)
-                assert diff.shape == (N.shape[0], self.batch_sgd)
-                #grad_nu = 1. / self.batch_sgd * diff.dot(XT[idx[lo:hi]])\
-                #    - self.lam_nu * self.nu
-                grad_nz = 1. / self.batch_sgd * _inner(diff, XT[idx[lo:hi]].toarray(), *N.nonzero()) - self.lam_tau * self.tau.data
-                #self.nu += self.learning_rate * grad_nu
+                #assert diff.shape == (N.shape[0], self.batch_sgd)
+                grad_nz = 1. / self.batch_sgd * \
+                    _spdot(diff, XT[idx[lo:hi]].toarray(), *N.nonzero()) \
+                    - self.lam_tau * self.tau.data
                 self.tau.data += self.learning_rate * grad_nz
                 self.alpha += self.learning_rate * diff.mean(axis=1,
                                                              keepdims=True)
@@ -307,7 +306,7 @@ def _writeline_and_time(s):
     return time.time()
 
 
-def _inner(X, Y, rows, cols):
+def _spdot(X, Y, rows, cols):
     '''
     Sparse dot product. Given matrices X and Y, and indices (rows, cols),
     compute the entries of X.dot(Y)[rows, cols]

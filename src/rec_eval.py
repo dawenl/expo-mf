@@ -138,6 +138,8 @@ def _make_prediction(train_data, Et, Eb, user_idx, batch_users, mu=None,
             args = [params[0][user_idx], params[1]]
             if len(params) > 2:  # for bias term in document or length-scale
                 args += [params[2][user_idx]]
+                if len(params[3:]) > 0:
+                    args += [params[3:]]
             if not callable(func):
                 raise TypeError("expecting a callable function")
             X_pred *= func(*args)
