@@ -168,14 +168,7 @@ class PoissonSocialExpoMF(BaseEstimator, TransformerMixin):
             if self.verbose:
                 print('ITERATION #%d' % i)
             self._update_factors(X, XT)
-            if self.verbose:
-                start_t = _writeline_and_time(
-                    '\tUpdating user exposure factors...\n')
             self._update_expo(X, XT, N)
-            if self.verbose:
-                print('\tUpdating user consideration factors: time=%.2f'
-                      % (time.time() - start_t))
-                sys.stdout.flush()
 
             if vad_data is not None:
                 vad_ndcg = self._validate(X, vad_data, **kwargs)
@@ -227,6 +220,7 @@ class PoissonSocialExpoMF(BaseEstimator, TransformerMixin):
         self.gamma = recompute_factors_multi(self.tau, self.alpha, self.gamma,
                                              self.beta, self.theta, X,
                                              self.lam_y, self.n_jobs,
+                                             update_user=True,
                                              batch_size=self.batch_size)
         if self.verbose:
             print('\r\tUpdating user exposure bias: time=%.2f'
@@ -235,6 +229,7 @@ class PoissonSocialExpoMF(BaseEstimator, TransformerMixin):
         self.alpha = recompute_factors_multi(self.tauT, self.gamma, self.alpha,
                                              self.theta, self.beta, XT,
                                              self.lam_y, self.n_jobs,
+                                             update_user=False,
                                              batch_size=self.batch_size)
         if self.verbose:
             print('\r\tUpdating item exposure bias: time=%.2f'
@@ -300,7 +295,7 @@ def get_mu(tau, Y, gamma, alpha):
         return: (batch_items, n_users) dense ndarray
 
     '''
-    return 1 - np.exp(-tau.dot(Y).toarray() + gamma + alpha.T)
+    return 1 - np.exp(-(tau.dot(Y).toarray() + gamma + alpha.T))
 
 
 def a_row_batch(nz_idx, theta_batch, beta, tau_batch, Y, gamma_batch, alpha,
@@ -412,7 +407,7 @@ def recompute_factors_ALS(X, X_old, S, alpha, gamma, Y, lam, lam_y, n_jobs,
 
 def update_tau(S_old, alpha, gamma, beta, theta, Y, N, lam_y, n_jobs,
                batch_size=1000):
-    m, _ = Y.shape[0]  # m: n_users
+    m = Y.shape[0]  # m: n_users
     start_idx = range(0, m, batch_size)
     end_idx = start_idx[1:] + [m]
 
@@ -441,7 +436,7 @@ def _multi_tau_batch(lo, hi, S_old_batch, alpha, gamma_batch, beta,
 
     num = Y.dot((A_batch / Ah_batch).T).T
     den = Y.dot((1 - A_batch * (1 - Et_batch)).T).T
-    S_batch_data = (num/den)[N_batch.nonzero()]
+    S_batch_data = S_old_batch.data * (num/den)[N_batch.nonzero()]
     return S_batch_data
 
 
@@ -469,7 +464,7 @@ def recompute_factors_multi(S, X, X_old, B, T, Y, lam_y, n_jobs,
         Y: click data^T (YT: (n_items, n_users))
         return: X_new: (n_items, 1)
     '''
-    m, _ = Y.shape[0]  # m: n_users
+    m = Y.shape[0]  # m: n_users
     start_idx = range(0, m, batch_size)
     end_idx = start_idx[1:] + [m]
 
