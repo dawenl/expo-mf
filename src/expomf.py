@@ -140,63 +140,77 @@ class ExpoMF(BaseEstimator, TransformerMixin):
         '''Model training and evaluation on validation set'''
         n_users = X.shape[0]
         XT = X.T.tocsr()  # pre-compute this
-        old_ndcg = -np.inf
+        self.vad_ndcg = -np.inf
         for i in xrange(self.max_iter):
             if self.verbose:
                 print('ITERATION #%d' % i)
-                start_t = _writeline_and_time('\tUpdating user factors...')
-            self.theta = recompute_factors(self.beta, self.theta, X,
-                                           self.lam_theta / self.lam_y,
-                                           self.lam_y,
-                                           self.mu,
-                                           self.n_jobs,
-                                           batch_size=self.batch_size)
-            if self.verbose:
-                print('\r\tUpdating user factors: time=%.2f'
-                      % (time.time() - start_t))
-                start_t = _writeline_and_time('\tUpdating item factors...')
-            self.beta = recompute_factors(self.theta, self.beta, XT,
-                                          self.lam_beta / self.lam_y,
-                                          self.lam_y,
-                                          self.mu,
-                                          self.n_jobs,
-                                          batch_size=self.batch_size)
-            if self.verbose:
-                print('\r\tUpdating item factors: time=%.2f'
-                      % (time.time() - start_t))
-                sys.stdout.flush()
-
-            if self.verbose:
-                start_t = _writeline_and_time('\tUpdating consideration prior...')
-
-            start_idx = range(0, n_users, self.batch_size)
-            end_idx = start_idx[1:] + [n_users]
-
-            A_sum = np.zeros_like(self.mu)
-            for lo, hi in zip(start_idx, end_idx):
-                A_sum += a_row_batch(X[lo:hi], self.theta[lo:hi], self.beta,
-                                     self.lam_y, self.mu).sum(axis=0)
-            self.mu = (self.a + A_sum - 1) / (self.a + self.b + n_users - 2)
-            if self.verbose:
-                print('\r\tUpdating consideration prior: time=%.2f'
-                      % (time.time() - start_t))
-                sys.stdout.flush()
-
+            self._update_factors(X, XT)
+            self._update_expo(X, n_users)
             if vad_data is not None:
-                vad_ndcg = rec_eval.normalized_dcg_at_k(X, vad_data,
-                                                        self.theta,
-                                                        self.beta,
-                                                        **kwargs)
-
-                if self.verbose:
-                    print('\tValidation NDCG@k: %.4f' % vad_ndcg)
-                    sys.stdout.flush()
-                if self.early_stopping and old_ndcg > vad_ndcg:
+                vad_ndcg = self._validate(X, vad_data, **kwargs)
+                if self.early_stopping and self.vad_ndcg > vad_ndcg:
                     break  # we will not save the parameter for this iteration
-                old_ndcg = vad_ndcg
+                self.vad_ndcg = vad_ndcg
+
             if self.save_params:
                 self._save_params(i)
         pass
+
+    def _update_factors(self, X, XT):
+        '''Update user and item collaborative factors with ALS'''
+        if self.verbose:
+            start_t = _writeline_and_time('\tUpdating user factors...')
+        self.theta = recompute_factors(self.beta, self.theta, X,
+                                       self.lam_theta / self.lam_y,
+                                       self.lam_y,
+                                       self.mu,
+                                       self.n_jobs,
+                                       batch_size=self.batch_size)
+        if self.verbose:
+            print('\r\tUpdating user factors: time=%.2f'
+                  % (time.time() - start_t))
+            start_t = _writeline_and_time('\tUpdating item factors...')
+        self.beta = recompute_factors(self.theta, self.beta, XT,
+                                      self.lam_beta / self.lam_y,
+                                      self.lam_y,
+                                      self.mu,
+                                      self.n_jobs,
+                                      batch_size=self.batch_size)
+        if self.verbose:
+            print('\r\tUpdating item factors: time=%.2f'
+                  % (time.time() - start_t))
+            sys.stdout.flush()
+        pass
+
+    def _update_expo(self, X, n_users):
+        '''Update exposure prior'''
+        if self.verbose:
+            start_t = _writeline_and_time('\tUpdating exposure prior...')
+
+        start_idx = range(0, n_users, self.batch_size)
+        end_idx = start_idx[1:] + [n_users]
+
+        A_sum = np.zeros_like(self.mu)
+        for lo, hi in zip(start_idx, end_idx):
+            A_sum += a_row_batch(X[lo:hi], self.theta[lo:hi], self.beta,
+                                 self.lam_y, self.mu).sum(axis=0)
+        self.mu = (self.a + A_sum - 1) / (self.a + self.b + n_users - 2)
+        if self.verbose:
+            print('\r\tUpdating exposure prior: time=%.2f'
+                  % (time.time() - start_t))
+            sys.stdout.flush()
+        pass
+
+    def _validate(self, X, vad_data, **kwargs):
+        '''Compute validation metric (NDCG@k)'''
+        vad_ndcg = rec_eval.normalized_dcg_at_k(X, vad_data,
+                                                self.theta,
+                                                self.beta,
+                                                **kwargs)
+        if self.verbose:
+            print('\tValidation NDCG@k: %.4f' % vad_ndcg)
+            sys.stdout.flush()
+        return vad_ndcg
 
     def _save_params(self, iter):
         '''Save the parameters'''

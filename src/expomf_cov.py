@@ -161,58 +161,52 @@ class ExpoMF(BaseEstimator, TransformerMixin):
     def _update(self, X, pi, vad_data, **kwargs):
         '''Model training and evaluation on validation set'''
         XT = X.T.tocsr()  # pre-compute this
-        old_ndcg = -np.inf
+        self.vad_ndcg = -np.inf
 
         for i in xrange(self.max_iter):
             if self.verbose:
                 print('ITERATION #%d' % i)
-                start_t = _writeline_and_time('\tUpdating user factors...')
-            self.theta = recompute_factors(self.beta, self.theta, pi,
-                                           self.nu, self.alpha, X,
-                                           self.lam_theta / self.lam_y,
-                                           self.lam_y,
-                                           self.n_jobs,
-                                           batch_size=self.batch_size)
-            if self.verbose:
-                print('\r\tUpdating user factors: time=%.2f'
-                      % (time.time() - start_t))
-                start_t = _writeline_and_time('\tUpdating item factors...')
-            self.beta = recompute_factors(self.theta, self.beta, self.nu, pi,
-                                          self.alpha, XT,
-                                          self.lam_beta / self.lam_y,
-                                          self.lam_y,
-                                          self.n_jobs,
-                                          batch_size=self.batch_size)
-            if self.verbose:
-                print('\r\tUpdating item factors: time=%.2f'
-                      % (time.time() - start_t))
-                start_t = _writeline_and_time('\tUpdating user consideration factors...\n')
-            self.update_nu(XT, pi)
-            if self.verbose:
-                print('\tUpdating user consideration factors: time=%.2f'
-                      % (time.time() - start_t))
-                sys.stdout.flush()
-
+            self._update_factors(X, XT, pi)
+            self._update_expo(XT, pi)
             if vad_data is not None:
-                mu = dict(params=[self.nu, pi, self.alpha],
-                          func=get_mu)
-                vad_ndcg = rec_eval.normalized_dcg_at_k(X, vad_data,
-                                                        self.theta,
-                                                        self.beta,
-                                                        mu=mu,
-                                                        **kwargs)
-                if self.verbose:
-                    print('\tValidation NDCG@k: %.4f' % vad_ndcg)
-                    sys.stdout.flush()
-                if self.early_stopping and old_ndcg > vad_ndcg:
+                vad_ndcg = self._validate(X, pi, vad_data, **kwargs)
+                if self.early_stopping and self.vad_ndcg > vad_ndcg:
                     break  # we will not save the parameter for this iteration
-                old_ndcg = vad_ndcg
+                self.vad_ndcg = vad_ndcg
             if self.save_params:
                 self._save_params(i)
         pass
 
-    def update_nu(self, XT, pi):
+    def _update_factors(self, X, XT, pi):
+        '''Update user and item collaborative factors with ALS'''
+        if self.verbose:
+            start_t = _writeline_and_time('\tUpdating user factors...')
+        self.theta = recompute_factors(self.beta, self.theta, pi,
+                                       self.nu, self.alpha, X,
+                                       self.lam_theta / self.lam_y,
+                                       self.lam_y,
+                                       self.n_jobs,
+                                       batch_size=self.batch_size)
+        if self.verbose:
+            print('\r\tUpdating user factors: time=%.2f'
+                  % (time.time() - start_t))
+            start_t = _writeline_and_time('\tUpdating item factors...')
+        self.beta = recompute_factors(self.theta, self.beta, self.nu, pi,
+                                      self.alpha, XT,
+                                      self.lam_beta / self.lam_y,
+                                      self.lam_y,
+                                      self.n_jobs,
+                                      batch_size=self.batch_size)
+        if self.verbose:
+            print('\r\tUpdating item factors: time=%.2f'
+                  % (time.time() - start_t))
+        pass
+
+    def _update_expo(self, XT, pi):
         '''Update user exposure factors and bias with mini-batch SGD'''
+        if self.verbose:
+            start_t = _writeline_and_time(
+                '\tUpdating user exposure factors...\n')
         nu_old = self.nu.copy()
         alpha_old = self.alpha.copy()
 
@@ -261,7 +255,24 @@ class ExpoMF(BaseEstimator, TransformerMixin):
                 # It seems that after a few epochs the validation loss will
                 # not decrease. However, we empirically found that it is still
                 # better to train for more epochs, instead of stop the SGD
+        if self.verbose:
+            print('\tUpdating user exposure factors: time=%.2f'
+                  % (time.time() - start_t))
+            sys.stdout.flush()
         pass
+
+    def _validate(self, X, pi, vad_data, **kwargs):
+        '''Compute validation metric (NDCG@k)'''
+        mu = dict(params=[self.nu, pi, self.alpha], func=get_mu)
+        vad_ndcg = rec_eval.normalized_dcg_at_k(X, vad_data,
+                                                self.theta,
+                                                self.beta,
+                                                mu=mu,
+                                                **kwargs)
+        if self.verbose:
+            print('\tValidation NDCG@k: %.4f' % vad_ndcg)
+            sys.stdout.flush()
+        return vad_ndcg
 
     def _save_params(self, iter):
         '''Save the parameters'''
