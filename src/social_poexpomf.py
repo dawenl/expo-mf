@@ -436,7 +436,7 @@ def _multi_tau_batch(lo, hi, S_old_batch, alpha, gamma_batch, beta,
 
     num = Y.dot((A_batch / Ah_batch).T).T
     den = Y.dot((1 - A_batch * (1 - Et_batch)).T).T
-    S_batch_data = S_old_batch.data * (num/den)[N_batch.nonzero()]
+    S_batch_data = S_old_batch.data * (num/(den + EPS))[N_batch.nonzero()]
     return S_batch_data
 
 
